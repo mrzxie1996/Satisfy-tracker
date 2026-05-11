@@ -599,6 +599,10 @@
           </button>
           <span class="muted" id="offline-push-status" style="font-size: 12px"></span>
         </div>
+        <div class="row" style="margin-top: 14px">
+          <button type="button" class="btn-secondary" id="btn-pushplus-test">发送推送测试</button>
+          <span class="muted" id="pushplus-test-status" style="font-size: 12px"></span>
+        </div>
       </section>
 
       <div class="err" id="error" hidden></div>
@@ -2318,6 +2322,40 @@
           }
           return outputArray;
         }
+
+        document.getElementById("btn-pushplus-test").addEventListener("click", async function () {
+          var st = document.getElementById("pushplus-test-status");
+          function setStatus(t) {
+            if (st) st.textContent = t;
+          }
+          if (location.protocol === "file:") {
+            setStatus("请通过 Vercel 或本地 dev 同源访问后再试（file:// 无法调用 /api）。");
+            return;
+          }
+          try {
+            setStatus("正在发送…");
+            var res = await fetch("/api/push", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                title: "Satisfy Tracker 测试",
+                content:
+                  "这是一条 PushPlus 微信推送测试。\n时间：" +
+                  new Date().toLocaleString("zh-CN", { hour12: false }),
+              }),
+            });
+            var j = await res.json().catch(function () {
+              return {};
+            });
+            if (!res.ok || !j.ok) {
+              setStatus((j && j.error) || "请求失败 " + res.status);
+              return;
+            }
+            setStatus("PushPlus 已受理（code 200），请查微信。");
+          } catch (e) {
+            setStatus((e && e.message) || String(e));
+          }
+        });
 
         document.getElementById("btn-offline-push").addEventListener("click", async function () {
           var st = document.getElementById("offline-push-status");
