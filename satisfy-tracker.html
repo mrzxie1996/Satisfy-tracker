@@ -556,9 +556,12 @@
         <button type="button" class="source-btn" data-source="end">
           END. Satisfy · HK
         </button>
+        <button type="button" class="source-btn" data-source="havensurf">
+          Haven Surf · Satisfy
+        </button>
         <p class="sidebar-hint">
-          均为<strong>港币 HKD</strong>。官网与 <strong>Slam Jam</strong> 为 Shopify
-          接口（分码库存）；END 可先导入列表再「补充分码」或使用代理抓取商品页。
+          均为<strong>港币 HKD</strong>。<strong>Haven</strong>：公开接口仅返回香港上下文的<strong>划线价 EUR</strong>（与首页标价不同），本页按<strong>EUR/HKD 中间价</strong>换算为参考港币；结账页 HKD 由支付渠道换算，数值可能略有差别。
+          官网与 Slam Jam、Haven（GraphQL）含分码库存；END 可先导入列表再「补充分码」。
         </p>
       </aside>
       <div class="main-col">
@@ -568,8 +571,7 @@
           <p class="eyebrow">TRACKER · HKD</p>
           <h1>Satisfy 上新追踪</h1>
           <p class="sub">
-            侧栏切换来源；打开页面或切换来源时会<strong>自动同步</strong>当前渠道。<strong>官网</strong>、<strong>Slam Jam</strong>：Shopify 集合 JSON
-            港币与分码库存。<strong>END.</strong>：品牌页 JSON-LD；分码需抓取商品页（可填自建代理）。
+            侧栏切换来源；打开页面或切换来源时会<strong>自动同步</strong>当前渠道。<strong>Haven Surf</strong> 使用 Shopify Storefront（香港市场划线价 EUR）再换算参考港币。<strong>官网</strong>、<strong>Slam Jam</strong>：集合 JSON 港币标价。<strong>END.</strong>：品牌页 JSON-LD；分码需抓取商品页（可填自建代理）。
           </p>
         </div>
         <div class="actions">
@@ -669,6 +671,7 @@
           <strong>Slam Jam</strong>（<a href="https://slamjam.com/en-hk/collections/satisfy" target="_blank" rel="noreferrer">en-hk / Satisfy</a>）：Shopify 集合接口，标价一般为港币。
           <strong>END.</strong>（<a href="https://www.endclothing.com/hk/brands/satisfy" target="_blank" rel="noreferrer">HK 品牌页</a>）：列表为港币价；分码由商品页
           <code>__NEXT_DATA__</code> 解析（可点「补充分码库存」）。
+          <strong>Haven Surf</strong>（<a href="https://havensurf.com/collections/satisfy" target="_blank" rel="noreferrer">collections/satisfy</a>）：Storefront API 在香港上下文的划线价为 EUR（结账 HKD 不在公开接口）。本页港币为<strong>划线 EUR × EUR/HKD 中间价</strong>，仅供比对，以结账页为准。
         </p>
       </footer>
     </div>
@@ -699,6 +702,13 @@
         var SLAMJAM_SATISFY_COLLECTION =
           "https://slamjam.com/en-hk/collections/satisfy";
         var SLAMJAM_STORE_PREFIX = "https://slamjam.com/en-hk";
+        /** Haven Surf — GraphQL 集合 satisfy（划线价用香港上下文 EUR） */
+        var HAVEN_STORE_PREFIX = "https://havensurf.com";
+        /** Storefront API：用于 @inContext(country: HK) 取香港市场划线价（仍为 EUR，但数值与默认集合页不同） */
+        var HAVEN_SF_GRAPHQL_PATH = "/api/2024-10/graphql.json";
+        /** 首页解析失败时的兜底（商户轮换后可能失效，届时依赖首页动态解析） */
+        var HAVEN_SF_TOKEN_FALLBACK = "b5053c919908d5cb6b214d979eb71357";
+        var EUR_HKD_LS = "satisfy:eurHkdRateCache";
         var END_BRAND_HK = "https://www.endclothing.com/hk/brands/satisfy";
         var KEY_IDS_PREFIX = "satisfy:lastIds:";
         var LEGACY_IDS = "satisfy:lastProductIds";
@@ -733,6 +743,48 @@
           } catch (e) {
             return "HK$" + n.toFixed(0);
           }
+        }
+
+        /** Haven 等：Shopify 返回的 EUR 金额字符串 → 整数港币（供 formatHKD） */
+        function eurAmountToHkdString(eurStr, rate) {
+          var eur = parseFloat(eurStr);
+          var r = typeof rate === "number" ? rate : 9.2;
+          if (isNaN(eur)) return "0";
+          return String(Math.round(eur * r));
+        }
+
+        /**
+         * Frankfurter 中间价 EUR→HKD；用于将 API 中的 EUR 划线价换算为参考港币。
+         * Haven 结账页 HKD 由支付网关换算，Shopify 公开接口不返回该字段。
+         */
+        async function fetchEurHkdRate() {
+          var fallback = 9.2;
+          try {
+            var raw = localStorage.getItem(EUR_HKD_LS);
+            if (raw) {
+              var prev = JSON.parse(raw);
+              if (prev && typeof prev.rate === "number" && prev.rate > 7 && prev.rate < 15) {
+                fallback = prev.rate;
+              }
+            }
+          } catch (e) {}
+          try {
+            var res = await fetch(
+              "https://api.frankfurter.dev/v1/latest?base=EUR&symbols=HKD",
+              { mode: "cors", credentials: "omit" }
+            );
+            if (res.ok) {
+              var j = await res.json();
+              var x = j.rates && j.rates.HKD;
+              if (typeof x === "number" && x > 7 && x < 15) {
+                try {
+                  localStorage.setItem(EUR_HKD_LS, JSON.stringify({ rate: x, ts: Date.now() }));
+                } catch (e2) {}
+                return x;
+              }
+            }
+          } catch (e) {}
+          return fallback;
         }
 
         function escapeAttr(s) {
@@ -868,7 +920,7 @@
 
         function migrateLegacyNotes() {
           if (localStorage.getItem(NOTES_MAP_KEY)) return;
-          var out = { official: {}, end: {}, slamjam: {} };
+          var out = { official: {}, end: {}, slamjam: {}, havensurf: {} };
           var leg = localStorage.getItem("satisfy:notes");
           if (leg) {
             try {
@@ -885,15 +937,16 @@
           migrateLegacyNotes();
           try {
             var raw = localStorage.getItem(NOTES_MAP_KEY);
-            if (!raw) return { official: {}, end: {}, slamjam: {} };
+            if (!raw) return { official: {}, end: {}, slamjam: {}, havensurf: {} };
             var p = JSON.parse(raw);
             return {
               official: p.official || {},
               end: p.end || {},
               slamjam: p.slamjam || {},
+              havensurf: p.havensurf || {},
             };
           } catch (e) {
-            return { official: {}, end: {}, slamjam: {} };
+            return { official: {}, end: {}, slamjam: {}, havensurf: {} };
           }
         }
 
@@ -995,6 +1048,126 @@
             if (page > 50) break;
           }
           return all;
+        }
+
+        var HAVEN_SATISFY_GQL =
+          "query HavenSatisfy @inContext(country: HK) {\n" +
+          "  collection(handle: \"satisfy\") {\n" +
+          "    products(first: 250) {\n" +
+          "      nodes {\n" +
+          "        id\n" +
+          "        handle\n" +
+          "        title\n" +
+          "        createdAt\n" +
+          "        featuredImage { url }\n" +
+          "        variants(first: 100) {\n" +
+          "          nodes {\n" +
+          "            id\n" +
+          "            title\n" +
+          "            availableForSale\n" +
+          "            price { amount currencyCode }\n" +
+          "          }\n" +
+          "        }\n" +
+          "      }\n" +
+          "    }\n" +
+          "  }\n" +
+          "}";
+
+        function legacyProductIdFromGid(gid) {
+          var m = /Product\/(\d+)/.exec(gid || "");
+          return m ? parseInt(m[1], 10) : 0;
+        }
+
+        function mapHavenGraphqlVariants(variantNodes, rate) {
+          var nodes = variantNodes || [];
+          return nodes.map(function (vn) {
+            var amt =
+              vn.price && vn.price.amount != null ? String(vn.price.amount) : "0";
+            return {
+              option1: vn.title && vn.title !== "Default Title" ? vn.title : "Default Title",
+              option2: null,
+              option3: null,
+              title: vn.title || "",
+              price: eurAmountToHkdString(amt, rate),
+              available: !!vn.availableForSale,
+            };
+          });
+        }
+
+        async function fetchHavenStorefrontToken() {
+          try {
+            var c = sessionStorage.getItem("havenSfToken");
+            if (c && /^[a-f0-9]{32}$/i.test(c)) return c;
+          } catch (e) {}
+          try {
+            var res = await fetch(HAVEN_STORE_PREFIX.replace(/\/$/, "") + "/", {
+              mode: "cors",
+              credentials: "omit",
+            });
+            if (res.ok) {
+              var html = await res.text();
+              var m = /storefrontApiAccessToken["\s]*:["\s]*([a-f0-9]{32})/i.exec(html);
+              if (m) {
+                try {
+                  sessionStorage.setItem("havenSfToken", m[1]);
+                } catch (e2) {}
+                return m[1];
+              }
+            }
+          } catch (e) {}
+          return HAVEN_SF_TOKEN_FALLBACK;
+        }
+
+        async function fetchHavenSatisfyShopifyHK(rate, token) {
+          var url = HAVEN_STORE_PREFIX.replace(/\/$/, "") + HAVEN_SF_GRAPHQL_PATH;
+          var res = await fetch(url, {
+            method: "POST",
+            mode: "cors",
+            credentials: "omit",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Shopify-Storefront-Access-Token": token,
+            },
+            body: JSON.stringify({ query: HAVEN_SATISFY_GQL }),
+          });
+          if (!res.ok) throw new Error("Storefront GraphQL HTTP " + res.status);
+          var j = await res.json();
+          if (j.errors && j.errors.length) {
+            throw new Error(
+              j.errors
+                .map(function (e) {
+                  return e.message;
+                })
+                .join("; ")
+            );
+          }
+          var col = j.data && j.data.collection;
+          if (!col || !col.products || !col.products.nodes) {
+            throw new Error("GraphQL 未返回 satisfy 集合");
+          }
+          var prefix = HAVEN_STORE_PREFIX.replace(/\/$/, "");
+          var nodes = col.products.nodes;
+          return nodes.map(function (node) {
+            var vid = legacyProductIdFromGid(node.id);
+            var vs = mapHavenGraphqlVariants(
+              node.variants && node.variants.nodes,
+              rate
+            );
+            var rangeStr = priceRangeText(vs);
+            var img =
+              node.featuredImage && node.featuredImage.url ? node.featuredImage.url : null;
+            return {
+              source: "havensurf",
+              id: vid,
+              title: node.title || "",
+              handle: node.handle || "",
+              createdAt: node.createdAt || "",
+              imageUrl: img,
+              priceRangeText: rangeStr,
+              variants: vs,
+              url: prefix + "/products/" + encodeURIComponent(node.handle || ""),
+            };
+          });
         }
 
         function fetchWithTimeout(url, init, timeoutMs) {
@@ -1544,8 +1717,10 @@
 
         var state = {
           activeSource: "official",
-          cache: { official: [], end: [], slamjam: [] },
-          lastSyncAt: { official: null, end: null, slamjam: null },
+          cache: { official: [], end: [], slamjam: [], havensurf: [] },
+          lastSyncAt: { official: null, end: null, slamjam: null, havensurf: null },
+          /** Haven 估算用 EUR→HKD 汇率（仅展示） */
+          fxEurHkd: null,
           filter: "all",
           pollTimer: null,
           notifyOn: false,
@@ -1553,9 +1728,17 @@
 
         function updateLastSyncLabel() {
           var iso = state.lastSyncAt[state.activeSource];
-          document.getElementById("last-sync").textContent = iso
-            ? "上次同步：" + formatDate(iso)
-            : "";
+          var el = document.getElementById("last-sync");
+          if (!el) return;
+          var line = iso ? "上次同步：" + formatDate(iso) : "";
+          if (state.activeSource === "havensurf" && state.fxEurHkd != null) {
+            line +=
+              (line ? " · " : "") +
+              "EUR/HKD " +
+              state.fxEurHkd.toFixed(2) +
+              "（中间价，参考港币）";
+          }
+          el.textContent = line;
         }
 
         function setActiveSource(src) {
@@ -1594,6 +1777,8 @@
                 ? "暂无数据，正在加载 END 列表或同步失败时请查看上方提示。"
                 : state.activeSource === "slamjam"
                 ? "暂无数据，正在加载 Slam Jam 或同步失败时请查看上方提示。"
+                : state.activeSource === "havensurf"
+                ? "暂无数据，正在加载 Haven Surf 或同步失败时请查看上方提示。"
                 : "暂无数据，正在加载官网数据或同步失败时请查看上方提示。";
             return;
           }
@@ -1608,6 +1793,8 @@
                 ? "END. 香港站（列表港币价）"
                 : p.source === "slamjam"
                 ? "Slam Jam · Hong Kong（港币）"
+                : p.source === "havensurf"
+                ? "Haven Surf（香港划线价 EUR → 参考港币；结账 HKD 以店铺为准）"
                 : "Satisfy 官网（港币）";
             var dateLine = p.createdAt
               ? '<p class="meta">上架：' + formatDate(p.createdAt) + "</p>"
@@ -1625,6 +1812,8 @@
                 ? "打开 END 商品页"
                 : p.source === "slamjam"
                 ? "打开 Slam Jam 商品页"
+                : p.source === "havensurf"
+                ? "打开 Haven Surf 商品页"
                 : "打开商品页（港币结账预览）";
             li.innerHTML =
               '<div class="card-media">' +
@@ -1835,6 +2024,76 @@
           }
         }
 
+        async function syncHavenSurf() {
+          var errEl = document.getElementById("error");
+          var ls = document.getElementById("last-sync");
+          if (ls) ls.textContent = "正在同步 Haven（香港划线价 EUR→参考港币）…";
+          errEl.hidden = true;
+          try {
+            var rate = await fetchEurHkdRate();
+            state.fxEurHkd = rate;
+            var token = await fetchHavenStorefrontToken();
+            var prevIds = loadIds("havensurf");
+            var baseline = prevIds.size === 0;
+            var rows = await fetchHavenSatisfyShopifyHK(rate, token);
+            var pretendPrev = baseline
+              ? new Set(
+                  rows.map(function (r) {
+                    return r.id;
+                  })
+                )
+              : prevIds;
+            var items = rows
+              .map(function (row) {
+                return Object.assign({}, row, {
+                  isNew: !pretendPrev.has(row.id),
+                });
+              })
+              .sort(sortDescOfficial);
+            state.cache.havensurf = items;
+            saveIds(
+              "havensurf",
+              new Set(
+                rows.map(function (r) {
+                  return r.id;
+                })
+              )
+            );
+            state.lastSyncAt.havensurf = new Date().toISOString();
+            updateLastSyncLabel();
+            if (
+              state.notifyOn &&
+              typeof Notification !== "undefined" &&
+              Notification.permission === "granted"
+            ) {
+              var fresh = baseline
+                ? []
+                : items.filter(function (m) {
+                    return !prevIds.has(m.id);
+                  });
+              if (fresh.length) {
+                new Notification("Haven Surf · Satisfy 上新 · " + fresh.length + " 款", {
+                  body: fresh
+                    .slice(0, 3)
+                    .map(function (x) {
+                      return x.title;
+                    })
+                    .join(" · "),
+                  icon: fresh[0].imageUrl || undefined,
+                });
+              }
+            }
+            render();
+          } catch (e) {
+            errEl.textContent =
+              (e && e.message ? e.message : String(e)) +
+              " — Haven 使用 Storefront GraphQL（香港上下文价格）；若失败请检查网络。港币为 EUR 中间价换算，与结账页可能略有差异。";
+            errEl.hidden = false;
+          } finally {
+            updateLastSyncLabel();
+          }
+        }
+
         function ingestEndProducts(rows) {
           if (!rows || !rows.length) {
             throw new Error(
@@ -1967,6 +2226,7 @@
         async function sync() {
           if (state.activeSource === "official") await syncOfficial();
           else if (state.activeSource === "slamjam") await syncSlamJam();
+          else if (state.activeSource === "havensurf") await syncHavenSurf();
           else await syncEnd();
         }
 
