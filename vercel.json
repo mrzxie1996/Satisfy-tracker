@@ -1,10 +1,6 @@
 {
   "rewrites": [
     {
-      "source": "/",
-      "destination": "/satisfy-tracker.html"
-    },
-    {
       "source": "/api/shopify/:path*",
       "destination": "https://satisfyrunning.com/:path*"
     }

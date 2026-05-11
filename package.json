@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && node --eval \"require('fs').copyFileSync('satisfy-tracker.html','dist/satisfy-tracker.html')\"",
+    "build": "vite build && node scripts/after-build.cjs",
     "preview": "vite preview"
   },
   "dependencies": {
