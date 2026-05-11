@@ -60,3 +60,4 @@ export default async function handler(req: any, res: any) {
     foundNew: newProductsMessage !== '' 
   });
 }
+
