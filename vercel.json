@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/shopify/:path*",
+      "destination": "https://satisfyrunning.com/:path*"
+    }
+  ]
+}
