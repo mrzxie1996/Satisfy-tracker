@@ -1,4 +1,10 @@
 {
+  "crons": [
+    {
+      "path": "/api/cron/check-new",
+      "schedule": "*/15 * * * *"
+    }
+  ],
   "redirects": [
     {
       "source": "/",
