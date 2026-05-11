@@ -600,6 +600,7 @@
           <span class="muted" id="offline-push-status" style="font-size: 12px"></span>
         </div>
         <div class="row" style="margin-top: 14px">
+          <button type="button" class="btn-secondary" id="btn-send-update-push">发送更新推送</button>
           <button type="button" class="btn-secondary" id="btn-pushplus-test">发送推送测试</button>
           <span class="muted" id="pushplus-test-status" style="font-size: 12px"></span>
         </div>
@@ -2441,6 +2442,26 @@
             var src = btn.getAttribute("data-source");
             if (src && src !== state.activeSource) setActiveSource(src);
           });
+        });
+
+        document.getElementById("btn-send-update-push").addEventListener("click", async function () {
+          try {
+            var res = await fetch("/api/push", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                title: "网站更新",
+                content: "这是一条测试推送",
+              }),
+            });
+            if (res.ok) {
+              alert("推送已成功发送。");
+            } else {
+              alert("推送发送失败（HTTP " + res.status + "）。");
+            }
+          } catch (e) {
+            alert("推送发送失败：" + ((e && e.message) || String(e)));
+          }
         });
 
         sync();
