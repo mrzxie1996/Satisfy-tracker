@@ -1,8 +1,8 @@
 {
   "crons": [
     {
-      "path": "/api/cron/check-new",
-      "schedule": "0 8 * * *"
+      "path": "/api/cron/refresh-end",
+      "schedule": "30 */6 * * *"
     }
   ],
   "redirects": [

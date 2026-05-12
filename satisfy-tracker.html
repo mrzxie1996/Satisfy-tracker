@@ -606,6 +606,18 @@
           </button>
           <span class="muted" id="offline-push-status" style="font-size: 12px"></span>
         </div>
+        <p class="hint" style="margin-top: 12px">
+          <strong>关网页后如何定时检查（Hobby 免 Pro）</strong>：在 Vercel 环境变量里设置随机长字符串
+          <code>CRON_SECRET</code>，再在
+          <a href="https://cron-job.org/" target="_blank" rel="noreferrer">cron-job.org</a>
+          新建任务——URL 填
+          <code>https://satisfy-tracker.vercel.app/api/cron/check-new</code>（域名改成你的部署），方法选
+          <strong>GET</strong>，在「请求头 / Headers」里增加
+          <code>Authorization</code>，值为
+          <code>Bearer &lt;与 Vercel 相同的 CRON_SECRET&gt;</code>；计划选「Cron」，时区
+          <strong>Asia/Shanghai</strong>，表达式填
+          <code>0 0,3,6,9,12,15,18,21 * * *</code>（北京时间每天 0/3/6/9/12/15/18/21 点整各一次，共 8 次）。保存后可在 Execution log 里看是否返回 HTTP 200。
+        </p>
         <p class="hint" id="section-push" style="margin-top: 1rem; margin-bottom: 0.5rem">
           <strong style="color: var(--accent-muted); font-weight: 500">服务端推送</strong>
           （PushPlus / Web Push，需同源部署后可用；本地双击 HTML 打开时按钮仍可点，但接口会失败）
@@ -622,7 +634,7 @@
       <section class="panel end-import-panel" id="panel-end-import" hidden>
         <h2>END：手动导入（推荐，可绕过跨域拦截）</h2>
         <p class="hint" style="margin-top: 0">
-          END 常对自动化请求返回超时或拒绝，公共代理也可能失效。若自动同步失败，请在本机用浏览器打开品牌页，再把<strong>完整网页源代码</strong>导入下方（数据仍在本地解析，不会上传）。
+          END 常对自动化请求返回超时或拒绝，公共代理也可能失效。若站长已在 Vercel 配置 KV 与定时任务（<code>/api/cron/refresh-end</code>），所有用户会优先从 <code>/api/end-snapshot</code> 拉取<strong>服务端统一快照</strong>，列表可持续更新。否则请在本机用浏览器打开品牌页，再把<strong>完整网页源代码</strong>导入下方（数据仍在本地解析，不会上传）。
         </p>
         <ol class="end-steps">
           <li>
@@ -2226,12 +2238,42 @@
           if (btn) btn.disabled = false;
         }
 
+        /**
+         * 同源部署若配置了 KV + Cron（/api/cron/refresh-end），则 GET /api/end-snapshot
+         * 返回共享目录，所有访客无需各自代理或粘贴源码即可更新列表。
+         */
+        async function trySyncEndFromServerSnapshot() {
+          try {
+            var origin =
+              typeof location !== "undefined" && location.origin ? location.origin : "";
+            if (!origin || origin === "null") return false;
+            var r = await fetchWithTimeout(
+              origin + "/api/end-snapshot",
+              { mode: "cors", credentials: "omit" },
+              18000
+            );
+            if (!r.ok) return false;
+            var j = await r.json();
+            if (!j || !j.ok || !Array.isArray(j.items) || !j.items.length) return false;
+            ingestEndProducts(j.items);
+            if (j.fetchedAt && typeof j.fetchedAt === "string") {
+              state.lastSyncAt.end = j.fetchedAt;
+            }
+            return true;
+          } catch (e) {
+            return false;
+          }
+        }
+
         async function syncEnd() {
           var errEl = document.getElementById("error");
           var ls = document.getElementById("last-sync");
           if (ls) ls.textContent = "正在同步…";
           errEl.hidden = true;
           try {
+            if (await trySyncEndFromServerSnapshot()) {
+              return;
+            }
             var html = await fetchHtmlPage(END_BRAND_HK);
             var rows = parseEndBrandHtml(html);
             ingestEndProducts(rows);
@@ -2433,7 +2475,9 @@
               setStatus((sj && sj.error) || "订阅失败");
               return;
             }
-            setStatus("已订阅。关闭网页后由 Vercel Cron 定时检查上新（免费计划多为每天一次，见 vercel.json）。");
+            setStatus(
+              "已订阅。关闭网页后需靠 cron-job.org 定时请求检查接口（见上方说明）；未配置前不会自动检查。"
+            );
           } catch (e) {
             setStatus((e && e.message) || String(e));
           }

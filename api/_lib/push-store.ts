@@ -1,4 +1,4 @@
-import { getRedis, kvEnvReady } from "./redis";
+import { getRedis, kvEnvReady } from "./redis.js";
 
 const SUBS_KEY = "satisfy-tracker:push-subs";
 const SNAP_KEY = "satisfy-tracker:id-snapshot";

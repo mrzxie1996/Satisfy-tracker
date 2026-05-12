@@ -1,4 +1,4 @@
-import type { CombinedSnapshot } from "./products";
+import type { CombinedSnapshot } from "./products.js";
 
 export function buildMarkdownAlert(args: {
   data: CombinedSnapshot;
