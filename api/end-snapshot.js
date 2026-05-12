@@ -1,11 +1,27 @@
-import { getRedis, kvEnvReady } from "./_lib/redis.js";
-import { readEndCatalog } from "./_lib/end-catalog.js";
-
 /**
- * GET /api/end-snapshot
- * 返回 KV 中最近一次 Cron 写入的 END 目录（JSON），供前端多用户共享，无需各自粘贴源码。
+ * GET /api/end-snapshot — 读取 KV 中的 END 目录快照（逻辑内联）
  */
-export default async function handler(req: any, res: any) {
+import { Redis } from "@upstash/redis";
+
+const END_CATALOG_REDIS_KEY = "end:catalog:v1";
+
+function kvEnvReady() {
+  return !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+}
+
+async function readEndCatalog(redis) {
+  const raw = await redis.get(END_CATALOG_REDIS_KEY);
+  if (typeof raw !== "string" || !raw.trim()) return null;
+  try {
+    const j = JSON.parse(raw);
+    if (!j || !Array.isArray(j.items) || !j.fetchedAt) return null;
+    return j;
+  } catch {
+    return null;
+  }
+}
+
+export default async function handler(req, res) {
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
@@ -27,7 +43,11 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const data = await readEndCatalog(getRedis());
+    const redis = new Redis({
+      url: process.env.KV_REST_API_URL,
+      token: process.env.KV_REST_API_TOKEN,
+    });
+    const data = await readEndCatalog(redis);
     if (!data || !data.items.length) {
       res.setHeader("Cache-Control", "public, max-age=60");
       return res.status(404).json({
@@ -43,7 +63,7 @@ export default async function handler(req: any, res: any) {
       fetchedAt: data.fetchedAt,
       items: data.items,
     });
-  } catch (e: unknown) {
+  } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return res.status(500).json({ ok: false, error: msg, items: [] });
   }
