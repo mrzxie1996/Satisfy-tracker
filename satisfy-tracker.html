@@ -634,7 +634,9 @@
       <section class="panel end-import-panel" id="panel-end-import" hidden>
         <h2>END：手动导入（推荐，可绕过跨域拦截）</h2>
         <p class="hint" style="margin-top: 0">
-          END 常对自动化请求返回超时或拒绝，公共代理也可能失效。若站长已在 Vercel 配置 KV 与定时任务（<code>/api/cron/refresh-end</code>），所有用户会优先从 <code>/api/end-snapshot</code> 拉取<strong>服务端统一快照</strong>，列表可持续更新。否则请在本机用浏览器打开品牌页，再把<strong>完整网页源代码</strong>导入下方（数据仍在本地解析，不会上传）。
+          END 常对自动化请求返回超时或拒绝，公共代理也可能失效。若站长已在 Vercel 配置 KV，并用外部定时器（如 cron-job.org）定期 GET
+          <code>/api/cron/refresh-end</code>（请求头与 <code>check-new</code> 相同：<code>Authorization: Bearer &lt;CRON_SECRET&gt;</code>），所有用户会优先从
+          <code>/api/end-snapshot</code> 拉取<strong>服务端统一快照</strong>，列表可持续更新。否则请在本机用浏览器打开品牌页，再把<strong>完整网页源代码</strong>导入下方（数据仍在本地解析，不会上传）。
         </p>
         <ol class="end-steps">
           <li>
@@ -2239,7 +2241,7 @@
         }
 
         /**
-         * 同源部署若配置了 KV + Cron（/api/cron/refresh-end），则 GET /api/end-snapshot
+         * 同源部署若配置了 KV，且外部定时器定期 GET /api/cron/refresh-end（与 check-new 同鉴权），则 GET /api/end-snapshot
          * 返回共享目录，所有访客无需各自代理或粘贴源码即可更新列表。
          */
         async function trySyncEndFromServerSnapshot() {

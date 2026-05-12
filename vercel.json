@@ -1,10 +1,4 @@
 {
-  "crons": [
-    {
-      "path": "/api/cron/refresh-end",
-      "schedule": "30 */6 * * *"
-    }
-  ],
   "redirects": [
     {
       "source": "/satisfy-tracker.html",
