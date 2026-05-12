@@ -2384,8 +2384,20 @@
           }
           try {
             setStatus("正在连接推送服务…");
-            var vk = await fetch("/api/push/vapid-public-key");
-            var vj = await vk.json();
+            var vk = await fetch("/api/web-push/vapid-public-key");
+            var rawVk = await vk.text();
+            var vj;
+            try {
+              vj = JSON.parse(rawVk);
+            } catch (parseErr) {
+              setStatus(
+                "服务端返回非 JSON（HTTP " +
+                  vk.status +
+                  "）：" +
+                  rawVk.slice(0, 160).replace(/\s+/g, " ")
+              );
+              return;
+            }
             if (!vk.ok || !vj.publicKey) {
               setStatus((vj && vj.error) || "服务端未配置 VAPID / KV，见仓库 .env.example");
               return;
@@ -2404,17 +2416,24 @@
               userVisibleOnly: true,
               applicationServerKey: urlBase64ToUint8Array(vj.publicKey),
             });
-            var res = await fetch("/api/push/subscribe", {
+            var res = await fetch("/api/web-push/subscribe", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(sub.toJSON()),
             });
-            var sj = await res.json();
+            var rawSub = await res.text();
+            var sj;
+            try {
+              sj = JSON.parse(rawSub);
+            } catch (parseErr2) {
+              setStatus("订阅接口返回非 JSON（HTTP " + res.status + "）：" + rawSub.slice(0, 160).replace(/\s+/g, " "));
+              return;
+            }
             if (!res.ok) {
               setStatus((sj && sj.error) || "订阅失败");
               return;
             }
-            setStatus("已订阅。关闭网页后服务器约每 15 分钟检查一次上新（需在 Vercel 启用 Cron）。");
+            setStatus("已订阅。关闭网页后由 Vercel Cron 定时检查上新（免费计划多为每天一次，见 vercel.json）。");
           } catch (e) {
             setStatus((e && e.message) || String(e));
           }

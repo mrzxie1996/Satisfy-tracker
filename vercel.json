@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/check-new",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 8 * * *"
     }
   ],
   "redirects": [

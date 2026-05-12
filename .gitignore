@@ -47,3 +47,4 @@ coverage/
 .cache/
 .eslintcache
 .turbo/
+.env*.local
