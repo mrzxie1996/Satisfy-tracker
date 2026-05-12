@@ -1,4 +1,4 @@
-import { kv } from "@vercel/kv";
+import { getRedis, kvEnvReady } from "./redis";
 
 const SUBS_KEY = "satisfy-tracker:push-subs";
 const SNAP_KEY = "satisfy-tracker:id-snapshot";
@@ -17,14 +17,15 @@ export type IdSnapshot = {
 };
 
 export function kvReady(): boolean {
-  return !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+  return kvEnvReady();
 }
 
 export async function getSubscriptions(): Promise<StoredPushSubscription[]> {
-  const raw = await kv.get<string>(SUBS_KEY);
-  if (!raw) return [];
+  const raw = await getRedis().get(SUBS_KEY);
+  if (raw == null || raw === "") return [];
+  const text = typeof raw === "string" ? raw : JSON.stringify(raw);
   try {
-    const arr = JSON.parse(raw) as StoredPushSubscription[];
+    const arr = JSON.parse(text) as StoredPushSubscription[];
     return Array.isArray(arr) ? arr : [];
   } catch {
     return [];
@@ -32,7 +33,7 @@ export async function getSubscriptions(): Promise<StoredPushSubscription[]> {
 }
 
 export async function saveSubscriptions(subs: StoredPushSubscription[]): Promise<void> {
-  await kv.set(SUBS_KEY, JSON.stringify(subs));
+  await getRedis().set(SUBS_KEY, JSON.stringify(subs));
 }
 
 export async function addSubscription(sub: StoredPushSubscription): Promise<void> {
@@ -48,10 +49,11 @@ export async function removeSubscription(endpoint: string): Promise<void> {
 }
 
 export async function getIdSnapshot(): Promise<IdSnapshot | null> {
-  const raw = await kv.get<string>(SNAP_KEY);
-  if (!raw) return null;
+  const raw = await getRedis().get(SNAP_KEY);
+  if (raw == null || raw === "") return null;
+  const text = typeof raw === "string" ? raw : JSON.stringify(raw);
   try {
-    const o = JSON.parse(raw) as IdSnapshot;
+    const o = JSON.parse(text) as IdSnapshot;
     if (!o || !Array.isArray(o.official)) return null;
     return {
       official: o.official,
@@ -64,5 +66,5 @@ export async function getIdSnapshot(): Promise<IdSnapshot | null> {
 }
 
 export async function setIdSnapshot(s: IdSnapshot): Promise<void> {
-  await kv.set(SNAP_KEY, JSON.stringify(s));
+  await getRedis().set(SNAP_KEY, JSON.stringify(s));
 }
