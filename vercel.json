@@ -7,12 +7,21 @@
   ],
   "redirects": [
     {
-      "source": "/",
-      "destination": "/satisfy-tracker.html",
-      "permanent": false
+      "source": "/satisfy-tracker.html",
+      "destination": "/",
+      "permanent": true
     }
   ],
   "headers": [
+    {
+      "source": "/",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
     {
       "source": "/satisfy-tracker.html",
       "headers": [
@@ -33,6 +42,10 @@
     }
   ],
   "rewrites": [
+    {
+      "source": "/",
+      "destination": "/satisfy-tracker.html"
+    },
     {
       "source": "/api/shopify/:path*",
       "destination": "https://satisfyrunning.com/:path*"
