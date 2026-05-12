@@ -1,17 +1,21 @@
-export const runtime = "nodejs";
+/**
+ * Node-style GET — same pattern as subscribe for Vercel api/ compatibility.
+ */
+export default async function handler(req: { method?: string }, res: any): Promise<void> {
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
 
-export async function GET(): Promise<Response> {
+  if (req.method !== "GET") {
+    res.setHeader("Allow", "GET");
+    res.status(405).json({ ok: false, error: "Method Not Allowed" });
+    return;
+  }
+
   const key = process.env.VAPID_PUBLIC_KEY;
   if (!key) {
-    return new Response(JSON.stringify({ ok: false, error: "VAPID_PUBLIC_KEY missing" }), {
-      status: 503,
-      headers: { "Content-Type": "application/json" },
-    });
+    res.status(503).json({ ok: false, error: "VAPID_PUBLIC_KEY missing" });
+    return;
   }
-  return new Response(JSON.stringify({ publicKey: key }), {
-    headers: {
-      "Content-Type": "application/json",
-      "Cache-Control": "public, max-age=3600",
-    },
-  });
+
+  res.setHeader("Cache-Control", "public, max-age=3600");
+  res.status(200).json({ publicKey: key });
 }
