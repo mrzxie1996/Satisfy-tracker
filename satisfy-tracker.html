@@ -2384,7 +2384,7 @@
           }
           try {
             setStatus("正在连接推送服务…");
-            var vk = await fetch("/api/web-push/vapid-public-key");
+            var vk = await fetch("/api/wpush-vapid");
             var rawVk = await vk.text();
             var vj;
             try {
@@ -2416,7 +2416,7 @@
               userVisibleOnly: true,
               applicationServerKey: urlBase64ToUint8Array(vj.publicKey),
             });
-            var res = await fetch("/api/web-push/subscribe", {
+            var res = await fetch("/api/wpush-subscribe", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(sub.toJSON()),
